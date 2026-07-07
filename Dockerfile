@@ -1,28 +1,18 @@
-﻿FROM python:3.12-slim AS backend
+﻿FROM node:20-alpine AS frontend
 
 WORKDIR /app
 
-# Install system dependencies for Pillow
-RUN apt-get update && apt-get install -y \
-    gcc \
-    libffi-dev \
-    libjpeg-dev \
-    zlib1g-dev \
-    ttf-mscorefonts-installer \
-    && rm -rf /var/lib/apt/lists/*
+COPY package.json ./
+RUN npm install
 
-# Copy requirements first for better caching
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+ARG VITE_BACKEND_URL=http://localhost:8000
+ENV VITE_BACKEND_URL=$VITE_BACKEND_URL
+RUN npm run build
 
-# Copy application code
-COPY app/ ./app/
-COPY routes/ ./routes/
-COPY services/ ./services/
+FROM nginx:alpine
+COPY --from=frontend /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Create uploads directory
-RUN mkdir -p /app/uploads
-
-EXPOSE 8000
-
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
